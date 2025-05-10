@@ -1,0 +1,84 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Camera = Workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+
+local Smoothness = 0.1
+local LastClickPos = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+local Target = nil
+
+local Tool = Instance.new("Tool")
+Tool.RequiresHandle = false
+Tool.Name = "TapAimbot"
+Tool.CanBeDropped = false
+Tool.Parent = LocalPlayer:WaitForChild("Backpack")
+
+Tool.AncestryChanged:Connect(function()
+    if not Tool:IsDescendantOf(LocalPlayer) then
+        Tool.Parent = LocalPlayer.Backpack
+    end
+end)
+
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if Tool.Parent == LocalPlayer.Character and input.UserInputType == Enum.UserInputType.MouseButton1 then
+        LastClickPos = input.Position
+    end
+end)
+
+UIS.TouchTap:Connect(function(taps)
+    if Tool.Parent == LocalPlayer.Character and #taps > 0 then
+        LastClickPos = taps[1].Position
+    end
+end)
+
+local function IsVisible(part)
+    local origin = Camera.CFrame.Position
+    local direction = (part.Position - origin).Unit * 1000
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    params.FilterDescendantsInstances = {LocalPlayer.Character or LocalPlayer}
+    local result = Workspace:Raycast(origin, direction, params)
+    return result and result.Instance and part:IsDescendantOf(result.Instance.Parent)
+end
+
+local function GetNearestToClick(pos)
+    local closest, shortest = nil, math.huge
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local root = player.Character.HumanoidRootPart
+            local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
+            if onScreen then
+                local distance = (Vector2.new(screenPos.X, screenPos.Y) - pos).Magnitude
+                if distance < shortest and IsVisible(root) then
+                    shortest = distance
+                    closest = root
+                end
+            end
+        end
+    end
+    return closest
+end
+
+Tool.Activated:Connect(function()
+    if Tool.Parent == LocalPlayer.Character then
+        if Target then
+            Target = nil
+        else
+            local found = GetNearestToClick(LastClickPos)
+            if found then
+                Target = found
+            end
+        end
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if Target then
+        local camPos = Camera.CFrame.Position
+        local direction = (Target.Position - camPos).Unit
+        local targetCF = CFrame.new(camPos, camPos + direction)
+        Camera.CFrame = Camera.CFrame:Lerp(targetCF, Smoothness)
+    end
+end)
